@@ -10,16 +10,13 @@ declare global {
     interface Request {
       userId?: string;
       userEmail?: string;
+      userRole?: string;
     }
   }
 }
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const JWT_SECRET = process.env.JWT_SECRET ?? '';
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '')
-  .split(',')
-  .map(email => email.trim().toLowerCase())
-  .filter(Boolean);
 
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
@@ -35,10 +32,16 @@ export async function verifyGoogleIdToken(idToken: string): Promise<TokenPayload
   return payload;
 }
 
-export function issueSessionToken(user: { id: number | string; email?: string | null }): string {
-  return jwt.sign({ sub: String(user.id), email: user.email ?? null }, JWT_SECRET, {
-    expiresIn: '30d',
-  });
+export function issueSessionToken(user: {
+  id: number | string;
+  email?: string | null;
+  role?: string | null;
+}): string {
+  return jwt.sign(
+    { sub: String(user.id), email: user.email ?? null, role: user.role ?? 'MEMBER' },
+    JWT_SECRET,
+    { expiresIn: '30d' },
+  );
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -60,15 +63,19 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     const payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
     req.userId = payload.sub;
     req.userEmail = payload.email ?? undefined;
+    req.userRole = payload.role ?? 'MEMBER';
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
+// Role lives on the `users` table and travels in the JWT from sign-in —
+// same trust model as email already had, not a live DB check per request.
+// That means demoting an admin doesn't take effect until their token
+// expires or they sign in again, not immediately.
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  const email = req.userEmail?.toLowerCase() ?? '';
-  if (!ADMIN_EMAILS.includes(email)) {
+  if (req.userRole !== 'ADMIN') {
     res.status(403).json({ error: 'Admin access required' });
     return;
   }

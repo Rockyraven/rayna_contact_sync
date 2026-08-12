@@ -4,7 +4,7 @@ import { verifyGoogleIdToken, issueSessionToken, hashPassword, verifyPassword } 
 
 const router = Router();
 
-const PUBLIC_USER_FIELDS = 'id, email, name, avatar_url, username, phone_number';
+const PUBLIC_USER_FIELDS = 'id, email, name, avatar_url, username, phone_number, role';
 
 function normalizeIdentifier(value: string): string {
   return value.trim().toLowerCase();
@@ -55,7 +55,7 @@ router.post('/google', async (req, res) => {
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (google_id)
        DO UPDATE SET email = $2, name = $3, avatar_url = $4, updated_at = now()
-       RETURNING id, email, name, avatar_url`,
+       RETURNING id, email, name, avatar_url, role`,
       [payload.sub, payload.email, payload.name ?? null, payload.picture ?? null],
     );
 
