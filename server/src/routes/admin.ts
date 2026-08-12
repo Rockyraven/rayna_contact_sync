@@ -1,12 +1,11 @@
 import { Router } from 'express';
 import pool from '../db';
+import { requireAuth, requireAdmin } from '../auth';
 import { syncLinkedAccount } from '../inboxSync';
 
 const router = Router();
 
-// TEMPORARY: admin auth disabled for local testing. This exposes every
-// employee's contacts and inbox metadata with no access control — re-enable
-// `requireAuth, requireAdmin` (from '../auth') before this runs anywhere but localhost.
+router.use(requireAuth, requireAdmin);
 
 router.get('/contacts', async (req, res) => {
   try {

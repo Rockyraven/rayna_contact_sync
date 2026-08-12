@@ -1,14 +1,21 @@
 import { useState } from 'react';
+import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext';
+import LoginScreen from './screens/LoginScreen';
 import ContactsView from './screens/ContactsView';
 import EmailAccountsView from './screens/EmailAccountsView';
 
 type Tab = 'contacts' | 'emails';
 
-// TEMPORARY: login screen removed for local testing — goes straight to the
-// data views. Backend auth is also disabled to match (see server/src/routes/admin.ts).
-// Restore AdminAuthProvider/LoginScreen before this runs anywhere but localhost.
-function App() {
+function AppContent() {
+  const { initializing, token, user, signOut } = useAdminAuth();
   const [tab, setTab] = useState<Tab>('contacts');
+
+  if (initializing) {
+    return <p>Loading…</p>;
+  }
+  if (!token) {
+    return <LoginScreen />;
+  }
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif' }}>
@@ -22,6 +29,10 @@ function App() {
         }}
       >
         <h1 style={{ color: '#ee7623', margin: 0 }}>Rayna Admin</h1>
+        <div>
+          <span style={{ marginRight: 12 }}>{user?.email ?? user?.name}</span>
+          <button onClick={signOut}>Sign out</button>
+        </div>
       </header>
       <nav style={{ display: 'flex', gap: 8, padding: 16 }}>
         <button onClick={() => setTab('contacts')} disabled={tab === 'contacts'}>
@@ -33,6 +44,14 @@ function App() {
       </nav>
       <main style={{ padding: 16 }}>{tab === 'contacts' ? <ContactsView /> : <EmailAccountsView />}</main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AdminAuthProvider>
+      <AppContent />
+    </AdminAuthProvider>
   );
 }
 

@@ -4,6 +4,28 @@ import { OAuth2Client } from 'google-auth-library';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const BACKFILL_LIMIT = 200;
+// Gmail's per-user rate limit cares about request rate, not just volume —
+// firing a full page of 100 detail fetches at once (Promise.all) reliably
+// triggers a 429 on any inbox that isn't nearly empty. Capping concurrency
+// keeps the request rate under that limit instead of bursting into it.
+const DETAIL_FETCH_CONCURRENCY = 5;
+
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < items.length) {
+      const current = nextIndex++;
+      results[current] = await fn(items[current]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 export type MessageSummary = {
   id: string;
@@ -70,7 +92,9 @@ async function backfillInbox(accessToken: string): Promise<MessageSummary[]> {
     const query = pageToken ? `&pageToken=${pageToken}` : '';
     const list = await gmailGet(accessToken, `/messages?labelIds=INBOX&maxResults=100${query}`);
     const ids: string[] = (list.messages ?? []).map((m: { id: string }) => m.id);
-    const details = await Promise.all(ids.map(id => getMessageSummary(accessToken, id)));
+    const details = await mapWithConcurrency(ids, DETAIL_FETCH_CONCURRENCY, id =>
+      getMessageSummary(accessToken, id),
+    );
     messages.push(...details);
     pageToken = list.nextPageToken;
   } while (pageToken && messages.length < BACKFILL_LIMIT);
@@ -93,7 +117,9 @@ async function incrementalSync(
     const added: { message: { id: string } }[] = (history.history ?? []).flatMap(
       (h: { messagesAdded?: { message: { id: string } }[] }) => h.messagesAdded ?? [],
     );
-    const details = await Promise.all(added.map(a => getMessageSummary(accessToken, a.message.id)));
+    const details = await mapWithConcurrency(added, DETAIL_FETCH_CONCURRENCY, a =>
+      getMessageSummary(accessToken, a.message.id),
+    );
     messages.push(...details);
     if (history.historyId) {
       latestHistoryId = history.historyId;

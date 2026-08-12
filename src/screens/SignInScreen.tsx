@@ -19,10 +19,12 @@ function SignInScreen() {
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const [name, setName] = useState('');
   const [newIdentifier, setNewIdentifier] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const handleLogin = () => {
     if (!identifier.trim() || !password) {
@@ -87,14 +89,22 @@ function SignInScreen() {
               value={identifier}
               onChangeText={setIdentifier}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999999"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password"
+                placeholderTextColor="#999999"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(v => !v)}
+              >
+                <Text style={styles.eyeButtonText}>{showPassword ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.button}
               onPress={handleLogin}
@@ -125,14 +135,22 @@ function SignInScreen() {
               value={newIdentifier}
               onChangeText={setNewIdentifier}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Password (min. 8 characters)"
-              placeholderTextColor="#999999"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password (min. 8 characters)"
+                placeholderTextColor="#999999"
+                secureTextEntry={!showNewPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowNewPassword(v => !v)}
+              >
+                <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.button}
               onPress={handleCreateAccount}
@@ -222,6 +240,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#222222',
     marginBottom: 12,
+  },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#222222',
+  },
+  eyeButton: {
+    paddingHorizontal: 14,
+  },
+  eyeButtonText: {
+    color: '#ee7623',
+    fontWeight: '600',
+    fontSize: 13,
   },
   hint: {
     fontSize: 12,

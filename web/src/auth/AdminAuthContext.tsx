@@ -11,7 +11,7 @@ import { API_BASE_URL } from '../config';
 
 type AdminUser = {
   id: number;
-  email: string;
+  email: string | null;
   name: string | null;
   avatar_url: string | null;
 };
@@ -20,8 +20,9 @@ type AdminAuthState = {
   token: string | null;
   user: AdminUser | null;
   initializing: boolean;
+  signingIn: boolean;
   error: string | null;
-  signInWithGoogle: (idToken: string) => Promise<void>;
+  signIn: (identifier: string, password: string) => Promise<void>;
   signOut: () => void;
 };
 
@@ -32,6 +33,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AdminUser | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,23 +46,27 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     setInitializing(false);
   }, []);
 
-  const signInWithGoogle = useCallback(async (idToken: string) => {
+  const signIn = useCallback(async (identifier: string, password: string) => {
     setError(null);
+    setSigningIn(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/google`, {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ identifier, password }),
       });
+      const body = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(`Sign-in failed with status ${res.status}`);
+        throw new Error(body?.error ?? `Sign-in failed with status ${res.status}`);
       }
-      const json = (await res.json()) as { token: string; user: AdminUser };
-      setToken(json.token);
-      setUser(json.user);
-      localStorage.setItem(SESSION_KEY, JSON.stringify(json));
+      const { token: nextToken, user: nextUser } = body as { token: string; user: AdminUser };
+      setToken(nextToken);
+      setUser(nextUser);
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ token: nextToken, user: nextUser }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sign-in failed');
+    } finally {
+      setSigningIn(false);
     }
   }, []);
 
@@ -71,8 +77,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ token, user, initializing, error, signInWithGoogle, signOut }),
-    [token, user, initializing, error, signInWithGoogle, signOut],
+    () => ({ token, user, initializing, signingIn, error, signIn, signOut }),
+    [token, user, initializing, signingIn, error, signIn, signOut],
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;

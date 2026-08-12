@@ -1,6 +1,15 @@
 import pool from './db';
 import { decrypt } from './crypto';
-import { syncInbox, MessageSummary } from './gmail';
+import { syncInbox, MessageSummary, mapWithConcurrency } from './gmail';
+
+// Syncing accounts one at a time doesn't scale: at 1000+ linked accounts,
+// even a fast per-account sync adds up to far longer than the 10-minute
+// interval this runs on, so passes would perpetually fall behind. This caps
+// how many accounts sync concurrently — independent from (and multiplied
+// with) each account's own internal Gmail request concurrency, so the actual
+// concurrent Gmail traffic across the whole project stays bounded and
+// predictable rather than either fully serial or fully unbounded.
+const ACCOUNT_SYNC_CONCURRENCY = 10;
 
 // One bulk upsert for the whole sync's worth of messages instead of one
 // query per message — a 200-message backfill was 200 round trips before.
@@ -41,11 +50,11 @@ export async function syncLinkedAccount(accountId: number): Promise<void> {
 
 export async function syncAllLinkedAccounts(): Promise<void> {
   const result = await pool.query(`SELECT id FROM linked_email_accounts`);
-  for (const row of result.rows) {
+  await mapWithConcurrency(result.rows, ACCOUNT_SYNC_CONCURRENCY, async row => {
     try {
       await syncLinkedAccount(row.id);
     } catch (err) {
       console.error(`Background sync failed for linked account ${row.id}:`, err);
     }
-  }
+  });
 }
