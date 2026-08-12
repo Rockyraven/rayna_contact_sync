@@ -35,13 +35,21 @@ router.post('/google', async (req, res) => {
     return;
   }
 
+  let payload;
   try {
-    const payload = await verifyGoogleIdToken(idToken);
-    if (!payload.email) {
-      res.status(400).json({ error: 'Google account has no email' });
-      return;
-    }
+    payload = await verifyGoogleIdToken(idToken);
+  } catch (err) {
+    console.error('Google token verification failed:', err);
+    res.status(401).json({ error: 'Invalid Google token' });
+    return;
+  }
 
+  if (!payload.email) {
+    res.status(400).json({ error: 'Google account has no email' });
+    return;
+  }
+
+  try {
     const result = await pool.query(
       `INSERT INTO users (google_id, email, name, avatar_url)
        VALUES ($1, $2, $3, $4)
@@ -55,8 +63,8 @@ router.post('/google', async (req, res) => {
     const token = issueSessionToken(user);
     res.json({ token, user });
   } catch (err) {
-    console.error('Google sign-in failed:', err);
-    res.status(401).json({ error: 'Invalid Google token' });
+    console.error('Failed to store Google sign-in:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Sign-in failed' });
   }
 });
 

@@ -7,36 +7,77 @@ const router = Router();
 
 router.use(requireAuth);
 
-async function upsertContact(userId: string, contact: DeviceContact) {
-  const mobile = contact.phoneNumbers[0]?.number ?? null;
-  const email = contact.emailAddresses[0]?.email ?? null;
-  const name = contact.displayName ?? null;
+type ContactRow = { email: string | null; mobile: string | null; name: string | null };
 
-  const existing = await pool.query(
-    `SELECT id FROM unified_contacts
-     WHERE user_id = $1
-       AND ((mobile IS NOT NULL AND mobile = $2) OR (email IS NOT NULL AND email = $3))
-     LIMIT 1`,
-    [userId, mobile, email],
-  );
-
-  if (existing.rows.length > 0) {
-    await pool.query(
-      `UPDATE unified_contacts
-       SET email = $1, mobile = $2, name = $3, sources = 'mobile_app',
-           synced_date = now(), updated_at = now()
-       WHERE id = $4`,
-      [email, mobile, name, existing.rows[0].id],
-    );
-    return;
+// Bulk-upserts a whole batch in 3 queries total (1 lookup + 1 update + 1
+// insert) instead of up to 2 queries per contact. Matching is by mobile OR
+// email against the existing table, same semantics the old per-contact loop
+// had — just resolved for the whole batch at once instead of one row at a time.
+async function upsertContactsBatch(userId: string, contacts: DeviceContact[]): Promise<number> {
+  // Dedupe within this batch — last occurrence wins, mirroring how a
+  // sequential loop would have had a later duplicate overwrite whatever an
+  // earlier one in the same batch just wrote.
+  const rows = new Map<string, ContactRow>();
+  for (const contact of contacts) {
+    const mobile = contact.phoneNumbers[0]?.number ?? null;
+    const email = contact.emailAddresses[0]?.email ?? null;
+    const name = contact.displayName ?? null;
+    if (!mobile && !email) {
+      continue;
+    }
+    rows.set(mobile ?? `email:${email}`, { mobile, email, name });
   }
 
-  await pool.query(
-    `INSERT INTO unified_contacts
-       (user_id, email, mobile, name, sources, contact_type, synced_date, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, 'mobile_app', 'contact', now(), now(), now())`,
-    [userId, email, mobile, name],
+  const deduped = [...rows.values()];
+  if (deduped.length === 0) {
+    return 0;
+  }
+
+  const existing = await pool.query(
+    `SELECT id, mobile, email FROM unified_contacts
+     WHERE user_id = $1 AND (mobile = ANY($2::text[]) OR email = ANY($3::text[]))`,
+    [userId, deduped.map(r => r.mobile), deduped.map(r => r.email)],
   );
+
+  const idByMobile = new Map<string, number>();
+  const idByEmail = new Map<string, number>();
+  for (const row of existing.rows) {
+    if (row.mobile) idByMobile.set(row.mobile, row.id);
+    if (row.email) idByEmail.set(row.email, row.id);
+  }
+
+  const toUpdate: (ContactRow & { id: number })[] = [];
+  const toInsert: ContactRow[] = [];
+  for (const row of deduped) {
+    const matchedId = (row.mobile && idByMobile.get(row.mobile)) || (row.email && idByEmail.get(row.email));
+    if (matchedId) {
+      toUpdate.push({ ...row, id: matchedId });
+    } else {
+      toInsert.push(row);
+    }
+  }
+
+  if (toUpdate.length > 0) {
+    await pool.query(
+      `UPDATE unified_contacts AS uc
+       SET email = v.email, mobile = v.mobile, name = v.name, sources = 'mobile_app',
+           synced_date = now(), updated_at = now()
+       FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[]) AS v(id, email, mobile, name)
+       WHERE uc.id = v.id`,
+      [toUpdate.map(r => r.id), toUpdate.map(r => r.email), toUpdate.map(r => r.mobile), toUpdate.map(r => r.name)],
+    );
+  }
+
+  if (toInsert.length > 0) {
+    await pool.query(
+      `INSERT INTO unified_contacts (user_id, email, mobile, name, sources, contact_type, synced_date, created_at, updated_at)
+       SELECT $1, v.email, v.mobile, v.name, 'mobile_app', 'contact', now(), now(), now()
+       FROM unnest($2::text[], $3::text[], $4::text[]) AS v(email, mobile, name)`,
+      [userId, toInsert.map(r => r.email), toInsert.map(r => r.mobile), toInsert.map(r => r.name)],
+    );
+  }
+
+  return deduped.length;
 }
 
 router.post('/sync', async (req, res) => {
@@ -45,24 +86,34 @@ router.post('/sync', async (req, res) => {
     res.status(400).json({ error: 'contacts must be an array' });
     return;
   }
-
-  const userId = req.userId!;
-  for (const contact of contacts) {
-    await upsertContact(userId, contact);
+  if (contacts.length === 0) {
+    res.json({ synced: 0 });
+    return;
   }
 
-  res.json({ synced: contacts.length });
+  try {
+    const synced = await upsertContactsBatch(req.userId!, contacts);
+    res.json({ synced });
+  } catch (err) {
+    console.error('Contacts sync failed:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Contacts sync failed' });
+  }
 });
 
 router.get('/', async (req, res) => {
-  const result = await pool.query(
-    `SELECT id, email, mobile, name, sources, synced_date, created_at, updated_at
-     FROM unified_contacts
-     WHERE user_id = $1
-     ORDER BY name ASC NULLS LAST`,
-    [req.userId],
-  );
-  res.json({ contacts: result.rows });
+  try {
+    const result = await pool.query(
+      `SELECT id, email, mobile, name, sources, synced_date, created_at, updated_at
+       FROM unified_contacts
+       WHERE user_id = $1
+       ORDER BY name ASC NULLS LAST`,
+      [req.userId],
+    );
+    res.json({ contacts: result.rows });
+  } catch (err) {
+    console.error('Failed to load contacts:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to load contacts' });
+  }
 });
 
 export default router;

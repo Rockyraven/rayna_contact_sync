@@ -68,6 +68,19 @@ app.use('/api/users', usersRoutes);
 app.use('/api/email-accounts', emailAccountsRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Safety net: catches anything a route didn't already handle itself (a
+// thrown error in code with no try/catch, a rejected promise Express 5
+// forwards here) so a bug always returns JSON, never Express's default HTML
+// error page which breaks every client that expects `{ error }`.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  if (res.headersSent) {
+    return;
+  }
+  res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
+});
+
 app.listen(PORT, () => {
   console.log(`Rayna Contact Sync server listening on port ${PORT}`);
 

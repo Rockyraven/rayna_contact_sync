@@ -106,6 +106,7 @@ function LinkedEmailsScreen() {
   const [addError, setAddError] = useState<string | null>(null);
   const [selected, setSelected] = useState<LinkedAccount | null>(null);
   const [resyncingId, setResyncingId] = useState<number | null>(null);
+  const [resyncError, setResyncError] = useState<string | null>(null);
 
   const loadAccounts = useCallback(async () => {
     setState('loading');
@@ -181,17 +182,19 @@ function LinkedEmailsScreen() {
   const resyncAccount = useCallback(
     async (accountId: number) => {
       setResyncingId(accountId);
+      setResyncError(null);
       try {
         const res = await fetch(`${API_BASE_URL}/api/email-accounts/${accountId}/resync`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
-          throw new Error(`Resync failed with status ${res.status}`);
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.error ?? `Resync failed with status ${res.status}`);
         }
         await loadAccounts();
-      } catch {
-        // resync is a best-effort nudge; leave the stale indicator showing on failure
+      } catch (e) {
+        setResyncError(e instanceof Error ? e.message : 'Resync failed');
       } finally {
         setResyncingId(null);
       }
@@ -219,6 +222,7 @@ function LinkedEmailsScreen() {
             )}
           </TouchableOpacity>
           {addError && <Text style={styles.errorText}>{addError}</Text>}
+          {resyncError && <Text style={styles.errorText}>{resyncError}</Text>}
         </View>
       }
       ListEmptyComponent={
