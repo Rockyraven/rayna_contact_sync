@@ -70,6 +70,14 @@ yarn-error.log
 server/contacts.json
 server/.env
 
+# Deployment secrets. This repo is public, so anything holding a real
+# credential must stay out of it. web/.env is deliberately not listed: it only
+# carries a Google client ID, which is public by design, and it's already
+# tracked. Release keystores are covered by the *.keystore rule above.
+.env
+.env.local
+*.env.production
+
 # Yarn
 .yarn/*
 !.yarn/patches

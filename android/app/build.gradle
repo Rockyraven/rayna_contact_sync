@@ -101,6 +101,9 @@ android {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
+            // The backend is currently reached over plain HTTP at a bare IP, which
+            // release builds block by default. Remove this once it's behind HTTPS.
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

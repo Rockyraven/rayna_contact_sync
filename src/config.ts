@@ -16,8 +16,9 @@ const LOCAL_URL = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://l
 // including physical devices, so no per-platform localhost mapping needed.
 const NGROK_URL = 'https://25b3-2409-4090-8073-c80e-82b-6fd8-e683-da3b.ngrok-free.app';
 
-// TODO: point this at the deployed backend once it exists.
-const PRODUCTION_URL = 'https://api.raynatours.com';
+// Deployed backend on EC2. nginx there serves the admin web app and proxies
+// /auth and /api through to the API container, so this one origin covers both.
+const PRODUCTION_URL = 'http://16.171.46.142:8080';
 
 
 const URLS = { local: LOCAL_URL, ngrok: NGROK_URL, production: PRODUCTION_URL };

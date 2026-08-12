@@ -1,17 +1,42 @@
+# Fully self-contained: its own network and its own nginx, so it shares nothing
+# with anything else already running on the host. Only one port is published.
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rayna_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: rayna_contact_sync
+    volumes:
+      - rayna_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rayna_app -d rayna_contact_sync']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   server:
     build: ./server
     env_file: ./server/.env
-    ports:
-      - '4000:4000'
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   web:
     build:
       context: ./web
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        # Empty base URL => the app calls /auth and /api as relative paths,
+        # which nginx proxies to the server container on this same origin.
+        VITE_API_BASE_URL: ''
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+    depends_on:
+      - server
     ports:
       - '8080:80'
     restart: unless-stopped
+
+volumes:
+  rayna_pgdata:
