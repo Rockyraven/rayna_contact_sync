@@ -1,7 +1,9 @@
 import { Platform } from 'react-native';
 
-// Which backend to talk to. Switch this one line as needed.
-const ENV: 'local' | 'ngrok' | 'production' = 'local';
+// Which backend to talk to. Switch this one line as needed — it stays on
+// 'production' so CI builds a distributable APK; flip it to 'local' while
+// developing against a backend running on your own machine.
+const ENV: 'local' | 'ngrok' | 'production' = 'production';
 
 // Local backend (`npm run dev` in server/) — reached differently per platform:
 // - Android emulator is its own device: `localhost` there means "inside the
@@ -16,9 +18,13 @@ const LOCAL_URL = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://l
 // including physical devices, so no per-platform localhost mapping needed.
 const NGROK_URL = 'https://25b3-2409-4090-8073-c80e-82b-6fd8-e683-da3b.ngrok-free.app';
 
-// Deployed backend on EC2. nginx there serves the admin web app and proxies
-// /auth and /api through to the API container, so this one origin covers both.
-const PRODUCTION_URL = 'http://16.171.46.142:8080';
+// Deployed backend, reached through CloudFront: it terminates TLS at the edge
+// and forwards to nginx on the EC2 box, which serves the admin web app and
+// proxies /auth and /api to the API container. Going through CloudFront rather
+// than straight to the instance means the app keeps working if that instance's
+// IP ever changes, and it's what makes Google Sign-In possible without a
+// purchased domain.
+const PRODUCTION_URL = 'https://d1fur91dw4of2i.cloudfront.net';
 
 
 const URLS = { local: LOCAL_URL, ngrok: NGROK_URL, production: PRODUCTION_URL };
