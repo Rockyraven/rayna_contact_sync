@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '../config';
+import { useAdminAuth } from '../auth/AdminAuthContext';
 
 type Contact = {
   id: number;
@@ -15,14 +16,17 @@ type Contact = {
 type LoadState = 'loading' | 'ready' | 'error' | 'forbidden';
 
 function ContactsView() {
+  const { token } = useAdminAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [state, setState] = useState<LoadState>('loading');
 
   const load = useCallback(async () => {
     setState('loading');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/contacts`);
-      if (res.status === 403) {
+      const res = await fetch(`${API_BASE_URL}/api/admin/contacts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401 || res.status === 403) {
         setState('forbidden');
         return;
       }
@@ -35,7 +39,7 @@ function ContactsView() {
     } catch {
       setState('error');
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     load();

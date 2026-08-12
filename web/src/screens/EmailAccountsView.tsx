@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '../config';
+import { useAdminAuth } from '../auth/AdminAuthContext';
 
 type LinkedAccount = {
   id: number;
@@ -15,16 +16,24 @@ type Message = {
   to: string;
 };
 
-type LoadState = 'loading' | 'ready' | 'error' | 'forbidden';
-
-function InboxView({ account, onBack }: { account: LinkedAccount; onBack: () => void }) {
+function InboxView({
+  account,
+  token,
+  onBack,
+}: {
+  account: LinkedAccount;
+  token: string | null;
+  onBack: () => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   const load = useCallback(async () => {
     setState('loading');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/email-accounts/${account.id}/messages`);
+      const res = await fetch(`${API_BASE_URL}/api/admin/email-accounts/${account.id}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) {
         throw new Error(`Request failed with status ${res.status}`);
       }
@@ -34,7 +43,7 @@ function InboxView({ account, onBack }: { account: LinkedAccount; onBack: () => 
     } catch {
       setState('error');
     }
-  }, [account.id]);
+  }, [account.id, token]);
 
   useEffect(() => {
     load();
@@ -65,7 +74,10 @@ function InboxView({ account, onBack }: { account: LinkedAccount; onBack: () => 
   );
 }
 
+type LoadState = 'loading' | 'ready' | 'error' | 'forbidden';
+
 function EmailAccountsView() {
+  const { token } = useAdminAuth();
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [selected, setSelected] = useState<LinkedAccount | null>(null);
@@ -73,8 +85,10 @@ function EmailAccountsView() {
   const load = useCallback(async () => {
     setState('loading');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/email-accounts`);
-      if (res.status === 403) {
+      const res = await fetch(`${API_BASE_URL}/api/admin/email-accounts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401 || res.status === 403) {
         setState('forbidden');
         return;
       }
@@ -87,14 +101,14 @@ function EmailAccountsView() {
     } catch {
       setState('error');
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   if (selected) {
-    return <InboxView account={selected} onBack={() => setSelected(null)} />;
+    return <InboxView account={selected} token={token} onBack={() => setSelected(null)} />;
   }
 
   if (state === 'loading') {
