@@ -18,6 +18,10 @@ import { formatRelativeTime, isOlderThanDays } from '../utils/time';
 
 const LAST_SYNCED_KEY = 'rayna_contacts_last_synced';
 const STALE_SYNC_DAYS = 7;
+// Sending a whole address book in one request means a body large enough to trip
+// proxy size limits, and a server round trip long enough to hit their timeouts.
+// Batching keeps each request small and lets a big sync make partial progress.
+const SYNC_BATCH_SIZE = 200;
 
 type LoadState = 'loading' | 'denied' | 'ready' | 'error';
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
@@ -43,6 +47,7 @@ function ContactsScreen() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [syncState, setSyncState] = useState<SyncState>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
   // undefined = not read from storage yet, null = read and never synced before.
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null | undefined>(undefined);
 
@@ -52,23 +57,32 @@ function ContactsScreen() {
 
   const syncContacts = useCallback(async () => {
     setSyncState('syncing');
+    setSyncError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/contacts/sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ contacts }),
-      });
-      if (!response.ok) {
-        throw new Error(`Sync failed with status ${response.status}`);
+      for (let start = 0; start < contacts.length; start += SYNC_BATCH_SIZE) {
+        const batch = contacts.slice(start, start + SYNC_BATCH_SIZE);
+        const response = await fetch(`${API_BASE_URL}/api/contacts/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ contacts: batch }),
+        });
+        if (!response.ok) {
+          const detail = await response.text().catch(() => '');
+          throw new Error(`HTTP ${response.status} ${detail.slice(0, 120)}`.trim());
+        }
       }
       const now = new Date().toISOString();
       await AsyncStorage.setItem(LAST_SYNCED_KEY, now);
       setLastSyncedAt(now);
       setSyncState('success');
-    } catch {
+    } catch (e) {
+      // Surfaced in the UI rather than swallowed: without the underlying
+      // message there is no way to tell a permission problem from a network
+      // one from a server error, on a device you can't attach a debugger to.
+      setSyncError(e instanceof Error ? e.message : String(e));
       setSyncState('error');
     }
   }, [contacts, token]);
@@ -182,7 +196,10 @@ function ContactsScreen() {
             <Text style={styles.syncMessageSuccess}>Synced successfully</Text>
           )}
           {syncState === 'error' && (
-            <Text style={styles.syncMessageError}>Sync failed. Try again.</Text>
+            <>
+              <Text style={styles.syncMessageError}>Sync failed. Try again.</Text>
+              {!!syncError && <Text style={styles.syncErrorDetail}>{syncError}</Text>}
+            </>
           )}
         </View>
       }
@@ -274,6 +291,12 @@ const styles = StyleSheet.create({
   syncMessageError: {
     color: '#b3261e',
     marginTop: 8,
+  },
+  syncErrorDetail: {
+    color: '#b3261e',
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
   },
   row: {
     paddingVertical: 10,
