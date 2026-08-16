@@ -29,16 +29,29 @@ export async function mapWithConcurrency<T, R>(
 
 export type MessageSummary = {
   id: string;
-  from: string;
-  to: string;
+  fromName: string;
+  fromEmail: string;
+  toName: string;
+  toEmail: string;
 };
 
-export type SyncResult = {
-  messages: MessageSummary[];
-  historyId: string;
-};
+export type MessageBatchHandler = (messages: MessageSummary[]) => Promise<void>;
 
-class GmailApiError extends Error {
+// Gmail's From/To headers arrive as RFC 5322 mailboxes, e.g.
+// `"Kellie Thornberry" <kellie.thornberry@bigpond.com>` or a bare
+// `sabah@raynatours.com` with no display name. A header can list several
+// comma-separated recipients; only the first is kept, matching what the
+// single from/to display has always shown.
+function parseAddress(header: string): { name: string; email: string } {
+  const first = header.split(',')[0]?.trim() ?? '';
+  const match = first.match(/^"?([^"<]*?)"?\s*<([^>]+)>$/);
+  if (match) {
+    return { name: match[1].trim(), email: match[2].trim() };
+  }
+  return { name: '', email: first };
+}
+
+export class GmailApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -55,7 +68,7 @@ export async function exchangeAuthCode(serverAuthCode: string): Promise<string> 
   return tokens.refresh_token;
 }
 
-async function getAccessToken(refreshToken: string): Promise<string> {
+export async function getAccessToken(refreshToken: string): Promise<string> {
   const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
   client.setCredentials({ refresh_token: refreshToken });
   const { token } = await client.getAccessToken();
@@ -82,11 +95,22 @@ async function getMessageSummary(accessToken: string, id: string): Promise<Messa
   );
   const headers: { name: string; value: string }[] = detail.payload?.headers ?? [];
   const header = (name: string) => headers.find(h => h.name === name)?.value ?? '';
-  return { id: detail.id, from: header('From'), to: header('To') };
+  const from = parseAddress(header('From'));
+  const to = parseAddress(header('To'));
+  return { id: detail.id, fromName: from.name, fromEmail: from.email, toName: to.name, toEmail: to.email };
 }
 
-async function backfillInbox(accessToken: string): Promise<MessageSummary[]> {
-  const messages: MessageSummary[] = [];
+export async function getCurrentHistoryId(accessToken: string): Promise<string> {
+  const profile = await gmailGet(accessToken, '/profile');
+  return profile.historyId;
+}
+
+// Calls onBatch after each page instead of accumulating everything and
+// returning once at the end — a caller can persist each page immediately,
+// so an interruption partway through (e.g. a rate limit) doesn't lose
+// whatever was already fetched.
+export async function fetchInboxBackfill(accessToken: string, onBatch: MessageBatchHandler): Promise<void> {
+  let fetched = 0;
   let pageToken: string | undefined;
   do {
     const query = pageToken ? `&pageToken=${pageToken}` : '';
@@ -95,17 +119,20 @@ async function backfillInbox(accessToken: string): Promise<MessageSummary[]> {
     const details = await mapWithConcurrency(ids, DETAIL_FETCH_CONCURRENCY, id =>
       getMessageSummary(accessToken, id),
     );
-    messages.push(...details);
+    await onBatch(details);
+    fetched += details.length;
     pageToken = list.nextPageToken;
-  } while (pageToken && messages.length < BACKFILL_LIMIT);
-  return messages;
+  } while (pageToken && fetched < BACKFILL_LIMIT);
 }
 
-async function incrementalSync(
+// Returns the latest historyId reached. If this throws partway through a
+// multi-page pull, the caller still has whatever historyId was passed in —
+// worse than an updated cursor, but no worse than before this call started.
+export async function fetchInboxChanges(
   accessToken: string,
   startHistoryId: string,
-): Promise<{ messages: MessageSummary[]; historyId: string }> {
-  const messages: MessageSummary[] = [];
+  onBatch: MessageBatchHandler,
+): Promise<string> {
   let latestHistoryId = startHistoryId;
   let pageToken: string | undefined;
   do {
@@ -120,32 +147,11 @@ async function incrementalSync(
     const details = await mapWithConcurrency(added, DETAIL_FETCH_CONCURRENCY, a =>
       getMessageSummary(accessToken, a.message.id),
     );
-    messages.push(...details);
+    await onBatch(details);
     if (history.historyId) {
       latestHistoryId = history.historyId;
     }
     pageToken = history.nextPageToken;
   } while (pageToken);
-  return { messages, historyId: latestHistoryId };
-}
-
-export async function syncInbox(refreshToken: string, historyId: string | null): Promise<SyncResult> {
-  const accessToken = await getAccessToken(refreshToken);
-
-  if (!historyId) {
-    const messages = await backfillInbox(accessToken);
-    const profile = await gmailGet(accessToken, '/profile');
-    return { messages, historyId: profile.historyId };
-  }
-
-  try {
-    return await incrementalSync(accessToken, historyId);
-  } catch (err) {
-    if (err instanceof GmailApiError && (err.status === 404 || err.status === 410)) {
-      const messages = await backfillInbox(accessToken);
-      const profile = await gmailGet(accessToken, '/profile');
-      return { messages, historyId: profile.historyId };
-    }
-    throw err;
-  }
+  return latestHistoryId;
 }

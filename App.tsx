@@ -47,7 +47,7 @@ function AppContent() {
     <View style={styles.container}>
       <View style={styles.appBar}>
         <Image
-          source={require('./src/assets/rayna-icon.png')}
+          source={require('./src/assets/rayna-logo.png')}
           style={styles.appBarLogo}
           resizeMode="contain"
         />
@@ -123,8 +123,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e5e5',
   },
   appBarLogo: {
-    width: 36,
-    height: 36,
+    width: 110,
+    height: undefined,
+    aspectRatio: 617 / 229,
   },
   appBarAccount: {
     flexDirection: 'row',

@@ -1,48 +1,75 @@
 import { useState } from 'react';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext';
 import LoginScreen from './screens/LoginScreen';
+import UsersOverview from './screens/UsersOverview';
 import ContactsView from './screens/ContactsView';
 import EmailAccountsView from './screens/EmailAccountsView';
+import logo from './assets/rayna-logo.png';
 
-type Tab = 'contacts' | 'emails';
+type Tab = 'dashboard' | 'contacts' | 'emails';
 
 function AppContent() {
   const { initializing, token, user, signOut } = useAdminAuth();
-  const [tab, setTab] = useState<Tab>('contacts');
+  const [tab, setTab] = useState<Tab>('dashboard');
+  const [filterUserId, setFilterUserId] = useState<number | undefined>(undefined);
 
   if (initializing) {
-    return <p>Loading…</p>;
+    return <p className="status-note">Loading…</p>;
   }
   if (!token) {
     return <LoginScreen />;
   }
 
+  const goToDashboard = () => {
+    setFilterUserId(undefined);
+    setTab('dashboard');
+  };
+
+  const goToContacts = (userId?: number) => {
+    setFilterUserId(userId);
+    setTab('contacts');
+  };
+
+  const goToEmails = (userId?: number) => {
+    setFilterUserId(userId);
+    setTab('emails');
+  };
+
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif' }}>
-      <header
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: 16,
-          borderBottom: '1px solid #ccc',
-        }}
-      >
-        <h1 style={{ color: '#ee7623', margin: 0 }}>Rayna Admin</h1>
-        <div>
-          <span style={{ marginRight: 12 }}>{user?.email ?? user?.name}</span>
-          <button onClick={signOut}>Sign out</button>
+    <div className="app">
+      <header className="topbar">
+        <img src={logo} alt="Rayna" />
+        <div className="account">
+          <span>{user?.email ?? user?.name}</span>
+          <button className="btn-outline" onClick={signOut}>
+            Sign out
+          </button>
         </div>
       </header>
-      <nav style={{ display: 'flex', gap: 8, padding: 16 }}>
-        <button onClick={() => setTab('contacts')} disabled={tab === 'contacts'}>
-          Contacts
+
+      <nav className="tabs">
+        <button onClick={goToDashboard} disabled={tab === 'dashboard'}>
+          Dashboard
         </button>
-        <button onClick={() => setTab('emails')} disabled={tab === 'emails'}>
-          Linked Emails
+        <button onClick={() => goToContacts(undefined)} disabled={tab === 'contacts' && !filterUserId}>
+          All Contacts
+        </button>
+        <button onClick={() => goToEmails(undefined)} disabled={tab === 'emails' && !filterUserId}>
+          All Linked Emails
         </button>
       </nav>
-      <main style={{ padding: 16 }}>{tab === 'contacts' ? <ContactsView /> : <EmailAccountsView />}</main>
+
+      <main className="content">
+        {tab === 'dashboard' && (
+          <UsersOverview onViewContacts={goToContacts} onViewEmails={goToEmails} />
+        )}
+        {tab === 'contacts' && (
+          <ContactsView userId={filterUserId} onBack={filterUserId ? goToDashboard : undefined} />
+        )}
+        {tab === 'emails' && (
+          <EmailAccountsView userId={filterUserId} onBack={filterUserId ? goToDashboard : undefined} />
+        )}
+      </main>
     </div>
   );
 }

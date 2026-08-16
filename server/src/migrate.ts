@@ -70,13 +70,40 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
   id BIGSERIAL PRIMARY KEY,
   linked_account_id BIGINT NOT NULL REFERENCES linked_email_accounts(id) ON DELETE CASCADE,
   gmail_message_id TEXT NOT NULL,
-  from_address TEXT,
-  to_address TEXT,
+  from_name TEXT,
+  from_email TEXT,
+  to_name TEXT,
+  to_email TEXT,
   synced_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (linked_account_id, gmail_message_id)
 );
 
+-- Replaces the original combined from_address/to_address strings with
+-- separate name/email columns, matching unified_contacts' shape.
+ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS from_name TEXT;
+ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS from_email TEXT;
+ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS to_name TEXT;
+ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS to_email TEXT;
+ALTER TABLE inbox_messages DROP COLUMN IF EXISTS from_address;
+ALTER TABLE inbox_messages DROP COLUMN IF EXISTS to_address;
+
 CREATE INDEX IF NOT EXISTS inbox_messages_linked_account_id_idx ON inbox_messages(linked_account_id);
+
+-- One row per unique correspondent per linked account (both senders and the
+-- account's own address, since that's who "to" always resolves to) — shaped
+-- like unified_contacts (name, email) rather than inbox_messages' one-row-
+-- per-message layout, so the same account can be exchanged with the same
+-- person many times without listing them more than once.
+CREATE TABLE IF NOT EXISTS inbox_contacts (
+  id BIGSERIAL PRIMARY KEY,
+  linked_account_id BIGINT NOT NULL REFERENCES linked_email_accounts(id) ON DELETE CASCADE,
+  name TEXT,
+  email TEXT NOT NULL,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (linked_account_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS inbox_contacts_linked_account_id_idx ON inbox_contacts(linked_account_id);
 
 CREATE TABLE IF NOT EXISTS rediffpro_accounts (
   id BIGSERIAL PRIMARY KEY,

@@ -9,9 +9,11 @@ import {
 import { API_BASE_URL, GOOGLE_WEB_CLIENT_ID } from '../config';
 import { useAuth } from '../auth/AuthContext';
 import { formatRelativeTime, isOlderThanDays } from '../utils/time';
+import Pagination from '../components/Pagination';
 
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const STALE_SYNC_DAYS = 7;
+const CONTACTS_PAGE_SIZE = 25;
 
 type LinkedAccount = {
   id: number;
@@ -20,10 +22,11 @@ type LinkedAccount = {
   last_synced_at: string | null;
 };
 
-type Message = {
-  id: string;
-  from: string;
-  to: string;
+type Contact = {
+  id: number;
+  name: string | null;
+  email: string;
+  last_seen_at: string;
 };
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -37,34 +40,41 @@ function InboxView({
   token: string | null;
   onBack: () => void;
 }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [state, setState] = useState<LoadState>('loading');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const loadMessages = useCallback(async () => {
+  const loadContacts = useCallback(async () => {
     setState('loading');
     try {
-      const response = await fetch(`${API_BASE_URL}/api/email-accounts/${account.id}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('pageSize', String(CONTACTS_PAGE_SIZE));
+      const response = await fetch(
+        `${API_BASE_URL}/api/email-accounts/${account.id}/messages?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }
-      const json = (await response.json()) as { messages: Message[] };
-      setMessages(json.messages);
+      const json = (await response.json()) as { messages: Contact[]; total: number };
+      setContacts(json.messages);
+      setTotal(json.total);
       setState('ready');
     } catch {
       setState('error');
     }
-  }, [account.id, token]);
+  }, [account.id, token, page]);
 
   useEffect(() => {
-    loadMessages();
-  }, [loadMessages]);
+    loadContacts();
+  }, [loadContacts]);
 
   return (
     <FlatList
-      data={state === 'ready' ? messages : []}
-      keyExtractor={item => item.id}
+      data={state === 'ready' ? contacts : []}
+      keyExtractor={item => String(item.id)}
       contentContainerStyle={styles.list}
       ListHeaderComponent={
         <View style={styles.headerRow}>
@@ -80,7 +90,7 @@ function InboxView({
         ) : state === 'error' ? (
           <View style={styles.centered}>
             <Text style={styles.message}>Couldn&apos;t load this inbox.</Text>
-            <TouchableOpacity style={styles.button} onPress={loadMessages}>
+            <TouchableOpacity style={styles.button} onPress={loadContacts}>
               <Text style={styles.buttonText}>Retry</Text>
             </TouchableOpacity>
           </View>
@@ -90,10 +100,16 @@ function InboxView({
       }
       renderItem={({ item }) => (
         <View style={styles.messageRow}>
-          <Text style={styles.from}>From: {item.from}</Text>
-          <Text style={styles.to}>To: {item.to}</Text>
+          <Text style={styles.fieldName}>{item.name || '—'}</Text>
+          <Text style={styles.fieldEmail}>{item.email}</Text>
+          <Text style={styles.fieldSynced}>Last synced {formatRelativeTime(item.last_seen_at)}</Text>
         </View>
       )}
+      ListFooterComponent={
+        state === 'ready' && total > 0 ? (
+          <Pagination page={page} pageSize={CONTACTS_PAGE_SIZE} total={total} onPageChange={setPage} />
+        ) : null
+      }
     />
   );
 }
@@ -361,18 +377,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   messageRow: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#cccccc',
   },
-  from: {
+  fieldName: {
     fontSize: 14,
     fontWeight: '600',
   },
-  to: {
+  fieldEmail: {
     fontSize: 13,
     color: '#555555',
-    marginTop: 2,
+    marginTop: 1,
+  },
+  fieldSynced: {
+    fontSize: 11,
+    color: '#999999',
+    marginTop: 3,
   },
 });
 

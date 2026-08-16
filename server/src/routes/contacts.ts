@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../db';
 import { requireAuth } from '../auth';
 import { DeviceContact } from '../types';
+import { parsePagination, parseSearch } from '../pagination';
 
 const router = Router();
 
@@ -101,15 +102,27 @@ router.post('/sync', async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
+  const search = parseSearch(req);
+  const { page, pageSize, limit, offset } = parsePagination(req);
   try {
     const result = await pool.query(
-      `SELECT id, email, mobile, name, sources, synced_date, created_at, updated_at
+      `SELECT id, email, mobile, name, sources, synced_date, created_at, updated_at,
+              COUNT(*) OVER() AS total_count
        FROM unified_contacts
        WHERE user_id = $1
-       ORDER BY name ASC NULLS LAST`,
-      [req.userId],
+         AND (
+           $2::text IS NULL
+           OR name ILIKE '%' || $2 || '%'
+           OR email ILIKE '%' || $2 || '%'
+           OR mobile ILIKE '%' || $2 || '%'
+         )
+       ORDER BY synced_date DESC NULLS LAST, name ASC NULLS LAST
+       LIMIT $3 OFFSET $4`,
+      [req.userId, search, limit, offset],
     );
-    res.json({ contacts: result.rows });
+    const total = result.rows.length > 0 ? Number(result.rows[0].total_count) : 0;
+    const contacts = result.rows.map(({ total_count, ...rest }) => rest);
+    res.json({ contacts, total, page, pageSize });
   } catch (err) {
     console.error('Failed to load contacts:', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to load contacts' });

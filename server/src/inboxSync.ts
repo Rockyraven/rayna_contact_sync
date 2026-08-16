@@ -1,6 +1,14 @@
 import pool from './db';
 import { decrypt } from './crypto';
-import { syncInbox, MessageSummary, mapWithConcurrency } from './gmail';
+import {
+  getAccessToken,
+  getCurrentHistoryId,
+  fetchInboxBackfill,
+  fetchInboxChanges,
+  mapWithConcurrency,
+  GmailApiError,
+  MessageSummary,
+} from './gmail';
 
 // Syncing accounts one at a time doesn't scale: at 1000+ linked accounts,
 // even a fast per-account sync adds up to far longer than the 10-minute
@@ -11,20 +19,62 @@ import { syncInbox, MessageSummary, mapWithConcurrency } from './gmail';
 // predictable rather than either fully serial or fully unbounded.
 const ACCOUNT_SYNC_CONCURRENCY = 10;
 
-// One bulk upsert for the whole sync's worth of messages instead of one
-// query per message — a 200-message backfill was 200 round trips before.
+// One bulk upsert per page instead of one query per message.
 async function upsertMessagesBatch(accountId: number, messages: MessageSummary[]): Promise<void> {
   if (messages.length === 0) {
     return;
   }
   await pool.query(
-    `INSERT INTO inbox_messages (linked_account_id, gmail_message_id, from_address, to_address)
-     SELECT $1, v.id, v.from_address, v.to_address
-     FROM unnest($2::text[], $3::text[], $4::text[]) AS v(id, from_address, to_address)
+    `INSERT INTO inbox_messages (linked_account_id, gmail_message_id, from_name, from_email, to_name, to_email)
+     SELECT $1, v.id, v.from_name, v.from_email, v.to_name, v.to_email
+     FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
+       AS v(id, from_name, from_email, to_name, to_email)
      ON CONFLICT (linked_account_id, gmail_message_id)
-     DO UPDATE SET from_address = EXCLUDED.from_address, to_address = EXCLUDED.to_address`,
-    [accountId, messages.map(m => m.id), messages.map(m => m.from), messages.map(m => m.to)],
+     DO UPDATE SET from_name = EXCLUDED.from_name, from_email = EXCLUDED.from_email,
+                   to_name = EXCLUDED.to_name, to_email = EXCLUDED.to_email`,
+    [
+      accountId,
+      messages.map(m => m.id),
+      messages.map(m => m.fromName),
+      messages.map(m => m.fromEmail),
+      messages.map(m => m.toName),
+      messages.map(m => m.toEmail),
+    ],
   );
+}
+
+// Derives one row per unique correspondent (sender or recipient) from a page
+// of messages. A blank display name never overwrites a previously-seen one
+// for the same address — later messages from the same sender don't always
+// carry a display name, and losing it would be a regression, not a refresh.
+async function upsertContactsBatch(accountId: number, messages: MessageSummary[]): Promise<void> {
+  const names: string[] = [];
+  const emails: string[] = [];
+  for (const m of messages) {
+    if (m.fromEmail) {
+      names.push(m.fromName);
+      emails.push(m.fromEmail);
+    }
+    if (m.toEmail) {
+      names.push(m.toName);
+      emails.push(m.toEmail);
+    }
+  }
+  if (emails.length === 0) {
+    return;
+  }
+  await pool.query(
+    `INSERT INTO inbox_contacts (linked_account_id, name, email, last_seen_at)
+     SELECT $1, v.name, v.email, now()
+     FROM unnest($2::text[], $3::text[]) AS v(name, email)
+     ON CONFLICT (linked_account_id, email)
+     DO UPDATE SET name = COALESCE(NULLIF(EXCLUDED.name, ''), inbox_contacts.name), last_seen_at = now()`,
+    [accountId, names, emails],
+  );
+}
+
+async function setHistoryId(accountId: number, historyId: string): Promise<void> {
+  await pool.query(`UPDATE linked_email_accounts SET history_id = $1 WHERE id = $2`, [historyId, accountId]);
 }
 
 export async function syncLinkedAccount(accountId: number): Promise<void> {
@@ -38,14 +88,41 @@ export async function syncLinkedAccount(accountId: number): Promise<void> {
 
   const { refresh_token_encrypted, history_id } = result.rows[0];
   const refreshToken = decrypt(refresh_token_encrypted);
-  const { messages, historyId } = await syncInbox(refreshToken, history_id ?? null);
+  const accessToken = await getAccessToken(refreshToken);
+  const onBatch = async (messages: MessageSummary[]) => {
+    await upsertMessagesBatch(accountId, messages);
+    await upsertContactsBatch(accountId, messages);
+  };
 
-  await upsertMessagesBatch(accountId, messages);
+  if (!history_id) {
+    // Capture and persist the resume cursor BEFORE fetching any pages. If
+    // the backfill gets interrupted partway (e.g. hits Gmail's rate limit,
+    // which is exactly what happened before this fix), this cursor and
+    // whatever pages already completed are still saved — the next attempt
+    // does an incremental sync from here instead of restarting the entire
+    // 200-message backfill from scratch, which is what caused repeat
+    // full-backfill attempts to compound into a rate-limit spiral.
+    // Trade-off: messages between wherever the backfill stopped and "now"
+    // are permanently skipped, since incremental sync only looks forward.
+    const historyId = await getCurrentHistoryId(accessToken);
+    await setHistoryId(accountId, historyId);
+    await fetchInboxBackfill(accessToken, onBatch);
+  } else {
+    try {
+      const latestHistoryId = await fetchInboxChanges(accessToken, history_id, onBatch);
+      await setHistoryId(accountId, latestHistoryId);
+    } catch (err) {
+      if (err instanceof GmailApiError && (err.status === 404 || err.status === 410)) {
+        const historyId = await getCurrentHistoryId(accessToken);
+        await setHistoryId(accountId, historyId);
+        await fetchInboxBackfill(accessToken, onBatch);
+      } else {
+        throw err;
+      }
+    }
+  }
 
-  await pool.query(
-    `UPDATE linked_email_accounts SET history_id = $1, last_synced_at = now() WHERE id = $2`,
-    [historyId, accountId],
-  );
+  await pool.query(`UPDATE linked_email_accounts SET last_synced_at = now() WHERE id = $1`, [accountId]);
 }
 
 export async function syncAllLinkedAccounts(): Promise<void> {

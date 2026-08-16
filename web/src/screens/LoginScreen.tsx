@@ -1,5 +1,6 @@
-import { useState, type CSSProperties, type SyntheticEvent } from 'react';
+import { useState, type SyntheticEvent } from 'react';
 import { useAdminAuth } from '../auth/AdminAuthContext';
+import logo from '../assets/rayna-logo.png';
 
 function LoginScreen() {
   const { signIn, signingIn, error } = useAdminAuth();
@@ -16,105 +17,55 @@ function LoginScreen() {
   };
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Rayna Admin</h1>
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <input
-          type="text"
-          placeholder="Email or username"
-          value={identifier}
-          onChange={e => setIdentifier(e.target.value)}
-          style={styles.input}
-          autoComplete="username"
-        />
-        <div style={styles.passwordRow}>
+    <div className="login-page">
+      <div className="login-card">
+        <img src={logo} alt="Rayna" className="login-logo" />
+        <p className="login-subtitle">Admin sign in</p>
+
+        <form onSubmit={handleSubmit} className="login-form">
+          <label className="login-label" htmlFor="identifier">
+            Email or username
+          </label>
           <input
-            type={showPassword ? 'text' : 'password'}
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            style={styles.passwordInput}
-            autoComplete="current-password"
+            id="identifier"
+            type="text"
+            placeholder="you@raynatours.com"
+            value={identifier}
+            onChange={e => setIdentifier(e.target.value)}
+            className="login-input"
+            autoComplete="username"
           />
-          <button
-            type="button"
-            onClick={() => setShowPassword(v => !v)}
-            style={styles.eyeButton}
-          >
-            {showPassword ? 'Hide' : 'Show'}
+
+          <label className="login-label" htmlFor="password">
+            Password
+          </label>
+          <div className="login-password-row">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="login-password-input"
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              className="login-eye-button"
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
+
+          <button type="submit" disabled={signingIn} className="login-button">
+            {signingIn ? 'Signing in…' : 'Sign in'}
           </button>
-        </div>
-        <button type="submit" disabled={signingIn} style={styles.button}>
-          {signingIn ? 'Signing in…' : 'Sign in'}
-        </button>
-        {error && <p style={styles.error}>{error}</p>}
-      </form>
+          {error && <p className="login-error">{error}</p>}
+        </form>
+      </div>
     </div>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
-    gap: 16,
-    fontFamily: 'system-ui, sans-serif',
-  },
-  title: {
-    color: '#ee7623',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    width: 280,
-  },
-  input: {
-    padding: '10px 12px',
-    fontSize: 15,
-    border: '1px solid #ccc',
-    borderRadius: 6,
-  },
-  passwordRow: {
-    display: 'flex',
-    alignItems: 'center',
-    border: '1px solid #ccc',
-    borderRadius: 6,
-  },
-  passwordInput: {
-    flex: 1,
-    padding: '10px 12px',
-    fontSize: 15,
-    border: 'none',
-    borderRadius: 6,
-    outline: 'none',
-  },
-  eyeButton: {
-    padding: '0 12px',
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#ee7623',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-  },
-  button: {
-    padding: '10px 12px',
-    fontSize: 15,
-    fontWeight: 600,
-    color: '#ffffff',
-    backgroundColor: '#ee7623',
-    border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  error: {
-    color: '#b3261e',
-    margin: 0,
-  },
-};
 
 export default LoginScreen;

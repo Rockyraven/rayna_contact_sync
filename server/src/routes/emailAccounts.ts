@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { encrypt } from '../crypto';
 import { exchangeAuthCode } from '../gmail';
 import { syncLinkedAccount } from '../inboxSync';
+import { parsePagination } from '../pagination';
 
 const router = Router();
 
@@ -76,6 +77,7 @@ router.post('/:id/resync', async (req, res) => {
 });
 
 router.get('/:id/messages', async (req, res) => {
+  const { page, pageSize, limit, offset } = parsePagination(req);
   try {
     const account = await pool.query(
       `SELECT id FROM linked_email_accounts WHERE id = $1 AND user_id = $2`,
@@ -99,14 +101,16 @@ router.get('/:id/messages', async (req, res) => {
     }
 
     const messages = await pool.query(
-      `SELECT gmail_message_id AS id, from_address AS "from", to_address AS "to"
-       FROM inbox_messages
+      `SELECT id, name, email, last_seen_at, COUNT(*) OVER() AS total_count
+       FROM inbox_contacts
        WHERE linked_account_id = $1
-       ORDER BY id DESC
-       LIMIT 50`,
-      [req.params.id],
+       ORDER BY last_seen_at DESC
+       LIMIT $2 OFFSET $3`,
+      [req.params.id, limit, offset],
     );
-    res.json({ sync_error: syncError, messages: messages.rows });
+    const total = messages.rows.length > 0 ? Number(messages.rows[0].total_count) : 0;
+    const rows = messages.rows.map(({ total_count, ...rest }) => rest);
+    res.json({ sync_error: syncError, messages: rows, total, page, pageSize });
   } catch (err) {
     console.error('Failed to load inbox messages:', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to load inbox messages' });
