@@ -1,9 +1,12 @@
 import { Platform } from 'react-native';
 
-// Which backend to talk to. Switch this one line as needed — it stays on
-// 'production' so CI builds a distributable APK; flip it to 'local' while
-// developing against a backend running on your own machine.
-const ENV: 'local' | 'ngrok' | 'production' = 'production';
+// Which backend to talk to. `__DEV__` is set automatically by React Native —
+// true for a Metro/debug build, false for a release build — so a debug run
+// reaches your local backend and a release build (the one CI/`assembleRelease`
+// produces) reaches production, with nothing to remember to flip back.
+// Override to 'ngrok' by hand only when testing on a physical device, where
+// LOCAL_URL's per-platform localhost mapping doesn't apply.
+const ENV: 'local' | 'ngrok' | 'production' = __DEV__ ? 'local' : 'production';
 
 // Local backend (`npm run dev` in server/) — reached differently per platform:
 // - Android emulator is its own device: `localhost` there means "inside the
@@ -11,8 +14,8 @@ const ENV: 'local' | 'ngrok' | 'production' = 'production';
 //   special alias for the host machine's localhost.
 // - iOS Simulator shares the Mac's network stack, so plain `localhost` works.
 // - A physical device (either OS) needs the host machine's real LAN IP
-//   instead of either — e.g. 'http://192.168.1.42:4000'.
-const LOCAL_URL = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+//   instead of either — e.g. 'http://192.168.1.42:4001'.
+const LOCAL_URL = Platform.OS === 'android' ? 'http://10.0.2.2:4001' : 'http://localhost:4001';
 
 // ngrok tunnel to the local backend — reachable from any device/emulator,
 // including physical devices, so no per-platform localhost mapping needed.

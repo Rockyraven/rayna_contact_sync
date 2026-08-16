@@ -47,22 +47,29 @@ async function upsertMessagesBatch(accountId: number, messages: MessageSummary[]
 // of messages. A blank display name never overwrites a previously-seen one
 // for the same address — later messages from the same sender don't always
 // carry a display name, and losing it would be a regression, not a refresh.
+//
+// Deduped by email BEFORE the upsert, not left for ON CONFLICT to handle:
+// every message's "to" is this same account's own address, so a page of
+// more than one message would otherwise feed the same email into a single
+// INSERT statement more than once — Postgres rejects an ON CONFLICT DO
+// UPDATE that would touch the same row twice within one statement.
 async function upsertContactsBatch(accountId: number, messages: MessageSummary[]): Promise<void> {
-  const names: string[] = [];
-  const emails: string[] = [];
+  const nameByEmail = new Map<string, string>();
   for (const m of messages) {
     if (m.fromEmail) {
-      names.push(m.fromName);
-      emails.push(m.fromEmail);
+      nameByEmail.set(m.fromEmail, m.fromName || nameByEmail.get(m.fromEmail) || '');
     }
-    if (m.toEmail) {
-      names.push(m.toName);
-      emails.push(m.toEmail);
+    // Every recipient is its own correspondent — a message to 3 people is 3
+    // entries here, not just its first "to" address.
+    for (const recipient of m.toRecipients) {
+      nameByEmail.set(recipient.email, recipient.name || nameByEmail.get(recipient.email) || '');
     }
   }
-  if (emails.length === 0) {
+  if (nameByEmail.size === 0) {
     return;
   }
+  const emails = [...nameByEmail.keys()];
+  const names = emails.map(email => nameByEmail.get(email)!);
   await pool.query(
     `INSERT INTO inbox_contacts (linked_account_id, name, email, last_seen_at)
      SELECT $1, v.name, v.email, now()

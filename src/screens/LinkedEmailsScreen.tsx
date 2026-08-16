@@ -42,6 +42,7 @@ function InboxView({
 }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [state, setState] = useState<LoadState>('loading');
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -58,9 +59,14 @@ function InboxView({
       if (!response.ok) {
         throw new Error(`Request failed with status ${response.status}`);
       }
-      const json = (await response.json()) as { messages: Contact[]; total: number };
+      const json = (await response.json()) as {
+        messages: Contact[];
+        total: number;
+        sync_error: string | null;
+      };
       setContacts(json.messages);
       setTotal(json.total);
+      setSyncError(json.sync_error);
       setState('ready');
     } catch {
       setState('error');
@@ -82,6 +88,11 @@ function InboxView({
             <Text style={styles.backText}>{'‹ Back'}</Text>
           </TouchableOpacity>
           <Text style={styles.header}>{account.email}</Text>
+          {state === 'ready' && syncError && (
+            <Text style={styles.errorText}>
+              Live sync failed: {syncError} (showing last-synced data below)
+            </Text>
+          )}
         </View>
       }
       ListEmptyComponent={

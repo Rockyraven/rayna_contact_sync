@@ -27,28 +27,47 @@ export async function mapWithConcurrency<T, R>(
   return results;
 }
 
+export type Address = { name: string; email: string };
+
 export type MessageSummary = {
   id: string;
   fromName: string;
   fromEmail: string;
+  // First "to" recipient, kept for inbox_messages' one-row-per-message log.
   toName: string;
   toEmail: string;
+  // Every "to" recipient — a message sent to several people is several
+  // distinct correspondents, not just its first address.
+  toRecipients: Address[];
 };
 
 export type MessageBatchHandler = (messages: MessageSummary[]) => Promise<void>;
 
 // Gmail's From/To headers arrive as RFC 5322 mailboxes, e.g.
 // `"Kellie Thornberry" <kellie.thornberry@bigpond.com>` or a bare
-// `sabah@raynatours.com` with no display name. A header can list several
-// comma-separated recipients; only the first is kept, matching what the
-// single from/to display has always shown.
-function parseAddress(header: string): { name: string; email: string } {
-  const first = header.split(',')[0]?.trim() ?? '';
-  const match = first.match(/^"?([^"<]*?)"?\s*<([^>]+)>$/);
+// `sabah@raynatours.com` with no display name, and a header can list several
+// comma-separated addresses.
+function parseSingleAddress(part: string): Address {
+  const trimmed = part.trim();
+  const match = trimmed.match(/^"?([^"<]*?)"?\s*<([^>]+)>$/);
   if (match) {
     return { name: match[1].trim(), email: match[2].trim() };
   }
-  return { name: '', email: first };
+  return { name: '', email: trimmed };
+}
+
+function parseAddress(header: string): Address {
+  return parseSingleAddress(header.split(',')[0] ?? '');
+}
+
+function parseAddressList(header: string): Address[] {
+  if (!header) {
+    return [];
+  }
+  return header
+    .split(',')
+    .map(parseSingleAddress)
+    .filter(a => a.email);
 }
 
 export class GmailApiError extends Error {
@@ -96,8 +115,16 @@ async function getMessageSummary(accessToken: string, id: string): Promise<Messa
   const headers: { name: string; value: string }[] = detail.payload?.headers ?? [];
   const header = (name: string) => headers.find(h => h.name === name)?.value ?? '';
   const from = parseAddress(header('From'));
-  const to = parseAddress(header('To'));
-  return { id: detail.id, fromName: from.name, fromEmail: from.email, toName: to.name, toEmail: to.email };
+  const toRecipients = parseAddressList(header('To'));
+  const firstTo = toRecipients[0] ?? { name: '', email: '' };
+  return {
+    id: detail.id,
+    fromName: from.name,
+    fromEmail: from.email,
+    toName: firstTo.name,
+    toEmail: firstTo.email,
+    toRecipients,
+  };
 }
 
 export async function getCurrentHistoryId(accessToken: string): Promise<string> {

@@ -36,7 +36,15 @@ router.get('/users', async (req, res) => {
        ) e ON e.user_id = u.id
        ORDER BY u.created_at DESC`,
     );
-    res.json({ users: result.rows });
+    // COUNT(*) is bigint, which node-postgres returns as a string — left
+    // as-is, summing these client-side (dashboard totals) silently
+    // concatenates instead of adding (0 + "10" + "42" -> "01042").
+    const users = result.rows.map(row => ({
+      ...row,
+      contact_count: Number(row.contact_count),
+      linked_email_count: Number(row.linked_email_count),
+    }));
+    res.json({ users });
   } catch (err) {
     console.error('Failed to load admin users overview:', err);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to load users' });

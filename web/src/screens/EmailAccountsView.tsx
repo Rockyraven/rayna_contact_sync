@@ -33,6 +33,7 @@ function InboxView({
 }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -57,9 +58,10 @@ function InboxView({
       if (!res.ok) {
         throw new Error(`Request failed with status ${res.status}`);
       }
-      const json = (await res.json()) as { messages: Contact[]; total: number };
+      const json = (await res.json()) as { messages: Contact[]; total: number; sync_error: string | null };
       setContacts(json.messages);
       setTotal(json.total);
+      setSyncError(json.sync_error);
       setState('ready');
     } catch {
       setState('error');
@@ -90,6 +92,9 @@ function InboxView({
         <p className="status-note error">
           Couldn&apos;t load this inbox. <button className="btn-outline" onClick={load}>Retry</button>
         </p>
+      )}
+      {state === 'ready' && syncError && (
+        <p className="status-note error">Live sync failed: {syncError} (showing last-synced data below)</p>
       )}
       {state === 'ready' && contacts.length === 0 && <p className="status-note">No contacts found.</p>}
       {state === 'ready' && contacts.length > 0 && (
