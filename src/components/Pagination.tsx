@@ -1,4 +1,5 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { colors } from '../theme';
 
 function Pagination({
   page,
@@ -52,7 +53,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    color: '#888888',
+    color: colors.muted,
   },
   controls: {
     flexDirection: 'row',
@@ -61,7 +62,7 @@ const styles = StyleSheet.create({
   },
   button: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cccccc',
+    borderColor: colors.border,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#444444',
+    color: colors.inkSoft,
   },
 });
 

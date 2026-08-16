@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import { useAuth } from '../auth/AuthContext';
 import { formatRelativeTime, isOlderThanDays } from '../utils/time';
+import { colors } from '../theme';
 import Pagination from '../components/Pagination';
 
 const LAST_SYNCED_KEY = 'rayna_contacts_last_synced';
@@ -51,6 +52,18 @@ async function hasContactsPermission(): Promise<boolean> {
   }
   const permission = await Contacts.requestPermission();
   return permission === 'authorized' || permission === 'limited';
+}
+
+// A saved-without-a-name phone contact has its display name fall back to the
+// number itself, so `name` and `mobile` are often literally identical — in
+// that case there's nothing distinct to show as a second line.
+function secondaryMobile(item: SyncedContact): string | null {
+  return item.mobile && item.mobile !== item.name ? item.mobile : null;
+}
+
+function initialFor(item: SyncedContact): string {
+  const source = item.name || item.email || item.mobile || '?';
+  return source.trim().charAt(0).toUpperCase() || '?';
 }
 
 function ContactsScreen() {
@@ -164,7 +177,7 @@ function ContactsScreen() {
   if (permissionState === 'loading') {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#ee7623" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -200,14 +213,18 @@ function ContactsScreen() {
     <FlatList
       data={listState === 'ready' ? syncedContacts : []}
       keyExtractor={item => String(item.id)}
-      contentContainerStyle={styles.list}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
       ListHeaderComponent={
         <View style={styles.headerRow}>
-          <Text style={styles.header}>{total} synced contacts</Text>
+          <View style={styles.statRow}>
+            <Text style={styles.statValue}>{total}</Text>
+            <Text style={styles.statLabel}>Synced Contacts</Text>
+          </View>
 
           {syncState === 'syncing' && (
             <View style={styles.syncingRow}>
-              <ActivityIndicator size="small" color="#ee7623" />
+              <ActivityIndicator size="small" color={colors.accent} />
               <Text style={styles.syncingText}>Syncing your contacts…</Text>
             </View>
           )}
@@ -248,7 +265,7 @@ function ContactsScreen() {
       }
       ListEmptyComponent={
         listState === 'loading' ? (
-          <ActivityIndicator size="large" color="#ee7623" style={styles.spacerTop} />
+          <ActivityIndicator size="large" color={colors.accent} style={styles.spacerTop} />
         ) : listState === 'error' ? (
           <View style={styles.centered}>
             <Text style={styles.message}>Something went wrong loading your contacts.</Text>
@@ -260,16 +277,24 @@ function ContactsScreen() {
           <Text style={styles.message}>No contacts synced yet.</Text>
         )
       }
-      renderItem={({ item }) => (
-        <View style={styles.row}>
-          <Text style={styles.name}>{item.name || 'Unnamed'}</Text>
-          {item.email && <Text style={styles.detail}>{item.email}</Text>}
-          {item.mobile && <Text style={styles.detail}>{item.mobile}</Text>}
-          <Text style={styles.syncedDate}>
-            {item.synced_date ? `Synced ${formatRelativeTime(item.synced_date)}` : 'Not yet synced'}
-          </Text>
-        </View>
-      )}
+      renderItem={({ item }) => {
+        const mobile = secondaryMobile(item);
+        return (
+          <View style={styles.row}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initialFor(item)}</Text>
+            </View>
+            <View style={styles.rowBody}>
+              <Text style={styles.name}>{item.name || item.mobile || item.email || 'Unnamed'}</Text>
+              {item.email && <Text style={styles.detail}>{item.email}</Text>}
+              {mobile && <Text style={styles.detail}>{mobile}</Text>}
+              <Text style={styles.syncedDate}>
+                {item.synced_date ? `Synced ${formatRelativeTime(item.synced_date)}` : 'Not yet synced'}
+              </Text>
+            </View>
+          </View>
+        );
+      }}
       ListFooterComponent={
         listState === 'ready' && total > 0 ? (
           <Pagination page={page} pageSize={CONTACTS_PAGE_SIZE} total={total} onPageChange={setPage} />
@@ -285,6 +310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
+    backgroundColor: colors.bg,
   },
   spacerTop: {
     marginTop: 48,
@@ -293,32 +319,48 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     marginBottom: 16,
+    color: colors.inkSoft,
   },
   button: {
-    backgroundColor: '#ee7623',
+    backgroundColor: colors.accent,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
   },
   buttonText: {
-    color: '#ffffff',
+    color: colors.accentInk,
     fontWeight: '600',
   },
   list: {
+    backgroundColor: colors.bg,
+  },
+  listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
   headerRow: {
     marginVertical: 16,
   },
-  header: {
-    fontSize: 18,
-    fontWeight: '700',
+  statRow: {
     marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.accent,
+    lineHeight: 32,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
   staleReminder: {
     fontSize: 13,
-    color: '#b3261e',
+    color: colors.warn,
     marginBottom: 12,
   },
   syncingRow: {
@@ -329,51 +371,71 @@ const styles = StyleSheet.create({
   syncingText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#555555',
+    color: colors.inkSoft,
   },
   lastSynced: {
     fontSize: 12,
-    color: '#888888',
+    color: colors.muted,
     marginTop: 8,
   },
   syncButton: {
-    backgroundColor: '#ee7623',
+    backgroundColor: colors.accent,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   syncMessageSuccess: {
-    color: '#1a7a3c',
+    color: colors.good,
     marginTop: 8,
   },
   syncMessageError: {
-    color: '#b3261e',
+    color: colors.warn,
     marginTop: 8,
   },
   syncErrorDetail: {
-    color: '#b3261e',
+    color: colors.warn,
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
   },
   row: {
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#cccccc',
+    borderBottomColor: colors.border,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  rowBody: {
+    flex: 1,
   },
   name: {
     fontSize: 16,
     fontWeight: '600',
+    color: colors.ink,
   },
   detail: {
-    fontSize: 14,
-    color: '#555555',
+    fontSize: 13.5,
+    color: colors.muted,
     marginTop: 2,
   },
   syncedDate: {
     fontSize: 11,
-    color: '#999999',
-    marginTop: 3,
+    color: colors.muted,
+    marginTop: 4,
   },
 });
 

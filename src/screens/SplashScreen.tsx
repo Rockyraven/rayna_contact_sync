@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
+import { colors } from '../theme';
 
 type Props = {
   onFinish: () => void;
@@ -25,7 +26,7 @@ function SplashScreen({ onFinish }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
+import { colors } from '../theme';
 
 function SignInScreen() {
   const { signIn, signInWithPassword, register, signingIn, error } = useAuth();
@@ -53,13 +54,15 @@ function SignInScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <Image
-          source={require('../assets/rayna-logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <View style={styles.card}>
+          <Image
+            source={require('../assets/rayna-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.subtitle}>Sign in to sync your contacts</Text>
 
-        <View style={styles.modeSwitch}>
+          <View style={styles.modeSwitch}>
           <TouchableOpacity
             style={[styles.modeTab, mode === 'login' && styles.modeTabActive]}
             onPress={() => setMode('login')}
@@ -83,7 +86,7 @@ function SignInScreen() {
             <TextInput
               style={styles.input}
               placeholder="Username, email, or phone number"
-              placeholderTextColor="#999999"
+              placeholderTextColor={colors.muted}
               autoCapitalize="none"
               autoCorrect={false}
               value={identifier}
@@ -93,7 +96,7 @@ function SignInScreen() {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Password"
-                placeholderTextColor="#999999"
+                placeholderTextColor={colors.muted}
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
@@ -111,7 +114,7 @@ function SignInScreen() {
               disabled={signingIn}
             >
               {signingIn ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={colors.accentInk} />
               ) : (
                 <Text style={styles.buttonText}>Log in</Text>
               )}
@@ -122,14 +125,14 @@ function SignInScreen() {
             <TextInput
               style={styles.input}
               placeholder="Full name (optional)"
-              placeholderTextColor="#999999"
+              placeholderTextColor={colors.muted}
               value={name}
               onChangeText={setName}
             />
             <TextInput
               style={styles.input}
               placeholder="Username, email, or phone number"
-              placeholderTextColor="#999999"
+              placeholderTextColor={colors.muted}
               autoCapitalize="none"
               autoCorrect={false}
               value={newIdentifier}
@@ -139,7 +142,7 @@ function SignInScreen() {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Password (min. 8 characters)"
-                placeholderTextColor="#999999"
+                placeholderTextColor={colors.muted}
                 secureTextEntry={!showNewPassword}
                 value={newPassword}
                 onChangeText={setNewPassword}
@@ -157,7 +160,7 @@ function SignInScreen() {
               disabled={signingIn}
             >
               {signingIn ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={colors.accentInk} />
               ) : (
                 <Text style={styles.buttonText}>Create account</Text>
               )}
@@ -176,6 +179,7 @@ function SignInScreen() {
         </TouchableOpacity>
 
         {error && <Text style={styles.error}>{error}</Text>}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -184,7 +188,7 @@ function SignInScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.bg,
   },
   container: {
     flexGrow: 1,
@@ -192,15 +196,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  card: {
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 28,
+    shadowColor: '#000000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   logo: {
     width: '60%',
     height: undefined,
     aspectRatio: 617 / 229,
-    marginBottom: 32,
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 24,
   },
   modeSwitch: {
     flexDirection: 'row',
-    backgroundColor: '#f2f2f2',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 10,
     padding: 4,
     width: '100%',
@@ -213,7 +239,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modeTabActive: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -223,29 +249,29 @@ const styles = StyleSheet.create({
   modeTabText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#999999',
+    color: colors.muted,
   },
   modeTabTextActive: {
-    color: '#222222',
+    color: colors.ink,
   },
   form: {
     width: '100%',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#222222',
+    color: colors.ink,
     marginBottom: 12,
   },
   passwordRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border,
     borderRadius: 8,
     marginBottom: 12,
   },
@@ -254,30 +280,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#222222',
+    color: colors.ink,
   },
   eyeButton: {
     paddingHorizontal: 14,
   },
   eyeButtonText: {
-    color: '#ee7623',
+    color: colors.accent,
     fontWeight: '600',
     fontSize: 13,
   },
   hint: {
     fontSize: 12,
-    color: '#888888',
+    color: colors.muted,
     marginBottom: 14,
     marginTop: -4,
   },
   button: {
-    backgroundColor: '#ee7623',
+    backgroundColor: colors.accent,
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
   buttonText: {
-    color: '#ffffff',
+    color: colors.accentInk,
     fontWeight: '600',
     fontSize: 16,
   },
@@ -290,29 +316,29 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#d9d9d9',
+    backgroundColor: colors.border,
   },
   dividerText: {
     marginHorizontal: 10,
     fontSize: 12,
-    color: '#999999',
+    color: colors.muted,
     fontWeight: '600',
   },
   googleButton: {
     borderWidth: 1,
-    borderColor: '#d9d9d9',
+    borderColor: colors.border,
     paddingVertical: 14,
     borderRadius: 8,
     width: '100%',
     alignItems: 'center',
   },
   googleButtonText: {
-    color: '#222222',
+    color: colors.ink,
     fontWeight: '600',
     fontSize: 16,
   },
   error: {
-    color: '#b3261e',
+    color: colors.warn,
     marginTop: 16,
     textAlign: 'center',
   },

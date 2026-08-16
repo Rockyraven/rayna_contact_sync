@@ -9,6 +9,7 @@ import {
 import { API_BASE_URL, GOOGLE_WEB_CLIENT_ID } from '../config';
 import { useAuth } from '../auth/AuthContext';
 import { formatRelativeTime, isOlderThanDays } from '../utils/time';
+import { colors } from '../theme';
 import Pagination from '../components/Pagination';
 
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -30,6 +31,10 @@ type Contact = {
 };
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+function initialFor(source: string): string {
+  return source.trim().charAt(0).toUpperCase() || '?';
+}
 
 function InboxView({
   account,
@@ -81,13 +86,15 @@ function InboxView({
     <FlatList
       data={state === 'ready' ? contacts : []}
       keyExtractor={item => String(item.id)}
-      contentContainerStyle={styles.list}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
       ListHeaderComponent={
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={onBack}>
             <Text style={styles.backText}>{'‹ Back'}</Text>
           </TouchableOpacity>
-          <Text style={styles.header}>{account.email}</Text>
+          <Text style={styles.inboxHeader}>{account.email}</Text>
+          <Text style={styles.statLabel}>{total} contacts</Text>
           {state === 'ready' && syncError && (
             <Text style={styles.errorText}>
               Live sync failed: {syncError} (showing last-synced data below)
@@ -97,7 +104,7 @@ function InboxView({
       }
       ListEmptyComponent={
         state === 'loading' ? (
-          <ActivityIndicator size="large" color="#ee7623" style={styles.spacerTop} />
+          <ActivityIndicator size="large" color={colors.accent} style={styles.spacerTop} />
         ) : state === 'error' ? (
           <View style={styles.centered}>
             <Text style={styles.message}>Couldn&apos;t load this inbox.</Text>
@@ -110,10 +117,15 @@ function InboxView({
         )
       }
       renderItem={({ item }) => (
-        <View style={styles.messageRow}>
-          <Text style={styles.fieldName}>{item.name || '—'}</Text>
-          <Text style={styles.fieldEmail}>{item.email}</Text>
-          <Text style={styles.fieldSynced}>Last synced {formatRelativeTime(item.last_seen_at)}</Text>
+        <View style={styles.row}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initialFor(item.name || item.email)}</Text>
+          </View>
+          <View style={styles.rowBody}>
+            <Text style={styles.fieldName}>{item.name || '—'}</Text>
+            <Text style={styles.fieldEmail}>{item.email}</Text>
+            <Text style={styles.fieldSynced}>Last synced {formatRelativeTime(item.last_seen_at)}</Text>
+          </View>
         </View>
       )}
       ListFooterComponent={
@@ -237,13 +249,17 @@ function LinkedEmailsScreen() {
     <FlatList
       data={state === 'ready' ? accounts : []}
       keyExtractor={item => String(item.id)}
-      contentContainerStyle={styles.list}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
       ListHeaderComponent={
         <View style={styles.headerRow}>
-          <Text style={styles.header}>{accounts.length} linked accounts</Text>
+          <View style={styles.statRow}>
+            <Text style={styles.statValue}>{accounts.length}</Text>
+            <Text style={styles.statLabel}>Linked Email Accounts</Text>
+          </View>
           <TouchableOpacity style={styles.addButton} onPress={addAccount} disabled={adding}>
             {adding ? (
-              <ActivityIndicator size="small" color="#ffffff" />
+              <ActivityIndicator size="small" color={colors.accentInk} />
             ) : (
               <Text style={styles.buttonText}>+ Add Account</Text>
             )}
@@ -254,7 +270,7 @@ function LinkedEmailsScreen() {
       }
       ListEmptyComponent={
         state === 'loading' ? (
-          <ActivityIndicator size="large" color="#ee7623" style={styles.spacerTop} />
+          <ActivityIndicator size="large" color={colors.accent} style={styles.spacerTop} />
         ) : state === 'error' ? (
           <View style={styles.centered}>
             <Text style={styles.message}>Couldn&apos;t load linked accounts.</Text>
@@ -270,13 +286,19 @@ function LinkedEmailsScreen() {
         const stale = !item.last_synced_at || isOlderThanDays(item.last_synced_at, STALE_SYNC_DAYS);
         return (
           <TouchableOpacity style={styles.accountRow} onPress={() => setSelected(item)}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initialFor(item.email)}</Text>
+            </View>
             <View style={styles.accountRowMain}>
               <Text style={styles.email}>{item.email}</Text>
-              <Text style={stale ? styles.lastSyncedStale : styles.lastSynced}>
-                {item.last_synced_at
-                  ? `Last synced ${formatRelativeTime(item.last_synced_at)}`
-                  : 'Never synced'}
-              </Text>
+              <View style={styles.syncRow}>
+                <View style={[styles.dot, stale ? styles.dotStale : styles.dotFresh]} />
+                <Text style={stale ? styles.lastSyncedStale : styles.lastSynced}>
+                  {item.last_synced_at
+                    ? `Last synced ${formatRelativeTime(item.last_synced_at)}`
+                    : 'Never synced'}
+                </Text>
+              </View>
             </View>
             {stale && (
               <TouchableOpacity
@@ -285,7 +307,7 @@ function LinkedEmailsScreen() {
                 disabled={resyncingId === item.id}
               >
                 {resyncingId === item.id ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
+                  <ActivityIndicator size="small" color={colors.accentInk} />
                 ) : (
                   <Text style={styles.resyncButtonText}>Resync</Text>
                 )}
@@ -311,52 +333,72 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     marginBottom: 16,
-    color: '#555555',
+    color: colors.inkSoft,
   },
   button: {
-    backgroundColor: '#ee7623',
+    backgroundColor: colors.accent,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
   },
   buttonText: {
-    color: '#ffffff',
+    color: colors.accentInk,
     fontWeight: '600',
   },
   list: {
+    backgroundColor: colors.bg,
+  },
+  listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
   headerRow: {
     marginVertical: 16,
   },
-  header: {
-    fontSize: 18,
-    fontWeight: '700',
+  statRow: {
     marginBottom: 12,
   },
+  statValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.accent,
+    lineHeight: 32,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  inboxHeader: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.ink,
+    marginBottom: 2,
+  },
   backText: {
-    color: '#ee7623',
+    color: colors.accent,
     fontWeight: '600',
     marginBottom: 8,
   },
   addButton: {
-    backgroundColor: '#ee7623',
+    backgroundColor: colors.accent,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   errorText: {
-    color: '#b3261e',
+    color: colors.warn,
     marginTop: 8,
   },
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#cccccc',
+    borderBottomColor: colors.border,
   },
   accountRowMain: {
     flex: 1,
@@ -365,45 +407,81 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 16,
     fontWeight: '600',
+    color: colors.ink,
+  },
+  syncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  dotFresh: {
+    backgroundColor: colors.good,
+  },
+  dotStale: {
+    backgroundColor: colors.warn,
   },
   lastSynced: {
     fontSize: 12,
-    color: '#888888',
-    marginTop: 2,
+    color: colors.muted,
   },
   lastSyncedStale: {
     fontSize: 12,
-    color: '#b3261e',
-    marginTop: 2,
+    color: colors.warn,
   },
   resyncButton: {
-    backgroundColor: '#ee7623',
+    backgroundColor: colors.accent,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
   },
   resyncButtonText: {
-    color: '#ffffff',
+    color: colors.accentInk,
     fontWeight: '600',
     fontSize: 13,
   },
-  messageRow: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#cccccc',
+    borderBottomColor: colors.border,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  rowBody: {
+    flex: 1,
   },
   fieldName: {
     fontSize: 14,
     fontWeight: '600',
+    color: colors.ink,
   },
   fieldEmail: {
     fontSize: 13,
-    color: '#555555',
+    color: colors.muted,
     marginTop: 1,
   },
   fieldSynced: {
     fontSize: 11,
-    color: '#999999',
+    color: colors.muted,
     marginTop: 3,
   },
 });

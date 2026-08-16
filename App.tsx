@@ -19,6 +19,7 @@ import SplashScreen from './src/screens/SplashScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import LinkedEmailsScreen from './src/screens/LinkedEmailsScreen';
+import { colors } from './src/theme';
 
 type Tab = 'contacts' | 'emails';
 
@@ -34,7 +35,7 @@ function AppContent() {
   if (initializing) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#ee7623" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -87,7 +88,7 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="#ffffff" />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <AuthProvider>
           <AppContent />
@@ -100,18 +101,20 @@ function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
   },
   container: {
     flex: 1,
   },
   content: {
     flex: 1,
+    backgroundColor: colors.bg,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.bg,
   },
   appBar: {
     flexDirection: 'row',
@@ -119,8 +122,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
+    backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: colors.border,
   },
   appBarLogo: {
     width: 110,
@@ -134,20 +138,20 @@ const styles = StyleSheet.create({
   },
   appBarEmail: {
     fontSize: 12,
-    color: '#666666',
+    color: colors.muted,
     marginRight: 12,
     flexShrink: 1,
   },
   signOutText: {
     fontSize: 13,
-    color: '#ee7623',
+    color: colors.accent,
     fontWeight: '600',
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: colors.border,
   },
   tabButton: {
     flex: 1,
@@ -157,17 +161,17 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#999999',
+    color: colors.muted,
   },
   tabLabelActive: {
-    color: '#ee7623',
+    color: colors.accent,
   },
   tabIndicator: {
     marginTop: 6,
     height: 3,
     width: 32,
     borderRadius: 2,
-    backgroundColor: '#ee7623',
+    backgroundColor: colors.accent,
   },
 });
 
