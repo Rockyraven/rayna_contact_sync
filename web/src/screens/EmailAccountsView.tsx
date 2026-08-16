@@ -105,7 +105,7 @@ function InboxView({
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
-                  <th>Last seen</th>
+                  <th>Last sync</th>
                 </tr>
               </thead>
               <tbody>
