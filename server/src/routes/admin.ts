@@ -24,7 +24,8 @@ router.get('/users', async (req, res) => {
          COALESCE(c.contact_count, 0) AS contact_count,
          c.last_synced AS contacts_last_synced,
          COALESCE(e.email_count, 0) AS linked_email_count,
-         e.last_synced AS email_last_synced
+         e.last_synced AS email_last_synced,
+         COALESCE(ec.email_contact_count, 0) AS email_contact_count
        FROM users u
        LEFT JOIN (
          SELECT user_id, COUNT(*) AS contact_count, MAX(synced_date) AS last_synced
@@ -34,6 +35,12 @@ router.get('/users', async (req, res) => {
          SELECT user_id, COUNT(*) AS email_count, MAX(last_synced_at) AS last_synced
          FROM linked_email_accounts GROUP BY user_id
        ) e ON e.user_id = u.id
+       LEFT JOIN (
+         SELECT lea.user_id, COUNT(ic.id) AS email_contact_count
+         FROM linked_email_accounts lea
+         JOIN inbox_contacts ic ON ic.linked_account_id = lea.id
+         GROUP BY lea.user_id
+       ) ec ON ec.user_id = u.id
        ORDER BY u.created_at DESC`,
     );
     // COUNT(*) is bigint, which node-postgres returns as a string — left
@@ -43,6 +50,7 @@ router.get('/users', async (req, res) => {
       ...row,
       contact_count: Number(row.contact_count),
       linked_email_count: Number(row.linked_email_count),
+      email_contact_count: Number(row.email_contact_count),
     }));
     res.json({ users });
   } catch (err) {

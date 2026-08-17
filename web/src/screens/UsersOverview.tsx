@@ -14,6 +14,7 @@ type UserOverview = {
   contacts_last_synced: string | null;
   linked_email_count: number;
   email_last_synced: string | null;
+  email_contact_count: number;
 };
 
 type LoadState = 'loading' | 'ready' | 'error' | 'forbidden';
@@ -32,11 +33,26 @@ function formatSynced(dateStr: string | null): string {
   return dateStr ? new Date(dateStr).toLocaleString() : 'Never';
 }
 
-function SyncCell({ count, lastSynced }: { count: number; lastSynced: string | null }) {
+function SyncCell({
+  count,
+  lastSynced,
+  secondaryCount,
+  secondaryLabel,
+}: {
+  count: number;
+  lastSynced: string | null;
+  secondaryCount?: number;
+  secondaryLabel?: string;
+}) {
   const stale = count > 0 && isStale(lastSynced);
   return (
     <div>
       <div className="sync-count numeric">{count}</div>
+      {secondaryCount !== undefined && (
+        <div className="sync-secondary numeric">
+          {secondaryCount} {secondaryLabel}
+        </div>
+      )}
       <div className={`sync-when numeric ${stale ? 'stale' : 'fresh'}`}>{formatSynced(lastSynced)}</div>
     </div>
   );
@@ -155,7 +171,12 @@ function UsersOverview({
                   <SyncCell count={u.contact_count} lastSynced={u.contacts_last_synced} />
                 </td>
                 <td>
-                  <SyncCell count={u.linked_email_count} lastSynced={u.email_last_synced} />
+                  <SyncCell
+                    count={u.linked_email_count}
+                    lastSynced={u.email_last_synced}
+                    secondaryCount={u.email_contact_count}
+                    secondaryLabel={u.email_contact_count === 1 ? 'email contact' : 'email contacts'}
+                  />
                 </td>
                 <td>
                   <div className="row-actions">
